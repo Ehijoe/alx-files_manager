@@ -1,0 +1,7 @@
+# Emacs backup files
+*~
+\#*\#
+
+# Node JS files
+package-lock.json
+node_modules/
