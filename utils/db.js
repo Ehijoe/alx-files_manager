@@ -26,6 +26,7 @@ class DBClient {
     if (!this.isAlive()) return 0;
     const users = this.database.collection('users');
     const nb = await users.countDocuments({}, { hint: '_id_' });
+    console.log(nb);
     return nb;
   }
 
@@ -33,6 +34,7 @@ class DBClient {
     if (!this.isAlive()) return 0;
     const files = this.database.collection('files');
     const nb = await files.countDocuments({}, { hint: '_id_' });
+    console.log(nb);
     return nb;
   }
 }
