@@ -4,9 +4,11 @@ import fs from 'fs';
 import dbClient from '../utils/db.js';
 import redisClient from '../utils/redis.js';
 
+const users = dbClient.database.collection('users');
+const files = dbClient.database.collection('files');
+
 class FilesController {
   static async postUpload(request, response) {
-    const files = dbClient.database.collection('files');
     const fileType = request.body.type;
     const {
       name, parentId, isPublic, data,
@@ -30,7 +32,6 @@ class FilesController {
         response.status(400).json({ error: 'Missing data' });
         return;
       }
-      document.data = data;
     }
 
     if (parentId) {
@@ -58,11 +59,19 @@ class FilesController {
       response.status(401).json({ error: 'Unauthorized' });
       return;
     }
-    document.userId = userId;
+    const user = await users.findOne({ _id: ObjectId(userId) });
+    if (!user) {
+      response.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    document.userId = ObjectId(userId);
 
     if (document.type === 'folder') {
-      files.insertOne(document);
-      response.status(201).json(document);
+      const res = await files.insertOne(document);
+      const id = res.insertedId;
+      response.status(201).json({
+        id, userId, name, type: fileType, isPublic: document.isPublic, parentId: document.parentId,
+      });
       return;
     }
 
@@ -76,7 +85,78 @@ class FilesController {
     fs.writeFile(document.localPath, Buffer.from(data, 'base64'), (err) => {
       if (err) console.log('Error writing file:', err);
     });
-    response.status(201).json(document);
+    const res = await files.insertOne(document);
+    const id = res.insertedId;
+    response.status(201).json({
+      id, userId, name, type: fileType, isPublic: document.isPublic, parentId: document.parentId,
+    });
+  }
+
+  static async getShow(request, response) {
+    const { id } = request.params;
+    const token = request.get('X-Token');
+    let userId;
+    try {
+      userId = await redisClient.get(`auth_${token}`);
+    } catch (err) {
+      console.log(err);
+      response.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    if (!userId) {
+      response.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const user = await users.findOne({ _id: ObjectId(userId) });
+    if (!user) {
+      response.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const file = await files.findOne({ _id: ObjectId(id), userId: ObjectId(userId) });
+    if (!file) {
+      response.status(404).json({ error: 'Not found' });
+      return;
+    }
+    response.json(file);
+  }
+
+  static async getIndex(request, response) {
+    const parentId = request.query.parentId || 0;
+    let page;
+    try {
+      page = parseInt(request.query.page, 10);
+    } catch (err) {
+      page = 0;
+    }
+    const token = request.get('X-Token');
+    let userId;
+    try {
+      userId = await redisClient.get(`auth_${token}`);
+    } catch (err) {
+      console.log(err);
+      response.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    if (!userId) {
+      response.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const user = await users.findOne({ _id: ObjectId(userId) });
+    if (!user) {
+      response.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const parent = await files.findOne({ _id: ObjectId(parentId), userId: ObjectId(userId) });
+    if (!parent && parentId !== 0) {
+      response.json([]);
+      return;
+    }
+    const childrenFiles = await files.aggregate([
+      { $match: { parentId } },
+      { $skip: (20 * page) },
+      { $limit: 20 },
+    ]).toArray();
+    response.json(childrenFiles);
   }
 }
 

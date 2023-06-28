@@ -14,6 +14,8 @@ function addRoutes(app) {
   app.get('/users/me', AuthController.getMe);
 
   app.post('/files', FilesController.postUpload);
+  app.get('/files/:id', FilesController.getShow);
+  app.get('/files', FilesController.getIndex);
 }
 
 export default addRoutes;
