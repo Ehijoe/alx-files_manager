@@ -158,6 +158,66 @@ class FilesController {
     ]).toArray();
     response.json(childrenFiles);
   }
+
+  static async putPublish(request, response) {
+    const { id } = request.params;
+    const token = request.get('X-Token');
+    let userId;
+    try {
+      userId = await redisClient.get(`auth_${token}`);
+    } catch (err) {
+      console.log(err);
+      response.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    if (!userId) {
+      response.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const user = await users.findOne({ _id: ObjectId(userId) });
+    if (!user) {
+      response.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    let file = await files.findOne({ _id: ObjectId(id), userId: ObjectId(userId) });
+    if (!file) {
+      response.status(404).json({ error: 'Not found' });
+      return;
+    }
+    files.updateOne(file, { $set: { isPublic: true } });
+    file = await files.findOne({ _id: ObjectId(id), userId: ObjectId(userId) });
+    response.json(file);
+  }
+
+  static async putUnpublish(request, response) {
+    const { id } = request.params;
+    const token = request.get('X-Token');
+    let userId;
+    try {
+      userId = await redisClient.get(`auth_${token}`);
+    } catch (err) {
+      console.log(err);
+      response.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    if (!userId) {
+      response.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const user = await users.findOne({ _id: ObjectId(userId) });
+    if (!user) {
+      response.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    let file = await files.findOne({ _id: ObjectId(id), userId: ObjectId(userId) });
+    if (!file) {
+      response.status(404).json({ error: 'Not found' });
+      return;
+    }
+    files.updateOne(file, { $set: { isPublic: false } });
+    file = await files.findOne({ _id: ObjectId(id), userId: ObjectId(userId) });
+    response.json(file);
+  }
 }
 
 export default FilesController;
