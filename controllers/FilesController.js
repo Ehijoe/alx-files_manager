@@ -1,5 +1,6 @@
 import { ObjectId } from 'mongodb';
 import { v4 as uuidv4 } from 'uuid';
+import { lookup } from 'mime-types';
 import fs from 'fs';
 import dbClient from '../utils/db.js';
 import redisClient from '../utils/redis.js';
@@ -217,6 +218,45 @@ class FilesController {
     files.updateOne(file, { $set: { isPublic: false } });
     file = await files.findOne({ _id: ObjectId(id), userId: ObjectId(userId) });
     response.json(file);
+  }
+
+  static async getFile(request, response) {
+    const { id } = request.params;
+    const token = request.get('X-Token');
+    let userId;
+    try {
+      userId = await redisClient.get(`auth_${token}`);
+    } catch (err) {
+      console.log(err);
+      userId = null;
+    }
+    let user;
+    if (userId) {
+      user = await users.findOne({ _id: ObjectId(userId) });
+    } else {
+      user = null;
+    }
+    let file;
+    if (user) {
+      file = await files.findOne({ _id: ObjectId(id), userId: ObjectId(userId) });
+    }
+    if (!file) {
+      file = await files.findOne({ _id: ObjectId(id) });
+    }
+    if (!file || !file.isPublic) {
+      response.status(404).json({ error: 'Not found' });
+      return;
+    }
+    const mime = lookup(file.name);
+    response.set('Content-Type', mime);
+    fs.readFile(file.localPath, (err, data) => {
+      if (err) {
+        console.log(err);
+        response.sendStatus(500);
+        return;
+      }
+      response.send(data);
+    });
   }
 }
 
