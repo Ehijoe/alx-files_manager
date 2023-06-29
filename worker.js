@@ -1,10 +1,11 @@
 import { ObjectId } from 'mongodb';
 import fs from 'fs';
 import imageThumbnail from 'image-thumbnail';
-import { fileQueue } from './utils/queue.js';
+import { fileQueue, userQueue } from './utils/queue.js';
 import dbClient from './utils/db.js';
 
 const files = dbClient.database.collection('files');
+const users = dbClient.database.collection('users');
 
 fileQueue.process(async (job, done) => {
   const { fileId, userId } = job;
@@ -31,4 +32,18 @@ fileQueue.process(async (job, done) => {
       console.error(err);
     }
   });
+});
+
+userQueue.process(async (job, done) => {
+  const { userId } = job;
+  if (!userId) {
+    done(new Error('Missing userId'));
+    return;
+  }
+  const user = await users.findOne({ _id: ObjectId(userId) });
+  if (!user) {
+    done(new Error('User not found'));
+    return;
+  }
+  console.log(`Welcome ${user.email}!`);
 });
